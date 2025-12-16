@@ -1,50 +1,165 @@
-# Welcome to your Expo app 👋
+# Secure WebView App (Expo + React Native)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This project demonstrates a **secure, resilient WebView integration** in a React Native (Expo) app.  
+It focuses on **authenticated session bootstrapping**, **native ↔ web communication**, **token refresh without reload**, and **safe navigation**, with tests validating the critical flows.
 
-## Get started
+## Features
 
-1. Install dependencies
+- Secure authentication using DummyJSON
+- Embedded WebView with authenticated session
+- Silent access-token refresh (no reload, no logout)
+- Native ↔ Web messaging bridge
+- Strict navigation allowlist
+- Android back button WebView handling
+- Offline detection with friendly error UI
+- Jest + Testing Library test coverage
 
-   ```bash
-   npm install
-   ```
+## Tech Stack
 
-2. Start the app
+- **Expo (latest)**
+- **React Native + TypeScript**
+- **react-native-webview**
+- **expo-secure-store**
+- **expo-network**
+- **expo-router**
+- **Jest + @testing-library/react-native**
 
-   ```bash
-   npx expo start
-   ```
+## Setup & Run
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### Install dependencies
 
 ```bash
-npm run reset-project
+npm install --legacy-peer-deps
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Start the app
 
-## Learn more
+```bash
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+- Press **a** → Android emulator
+- Press **i** → iOS simulator
+- Or scan QR with Expo Go
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Run tests
 
-## Join the community
+```bash
+npm test
+```
 
-Join our community of developers creating universal apps.
+## Authentication Flow
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### Credentials (DummyJSON)
+
+```
+username: emilys
+password: emilyspass
+```
+
+### Flow
+
+1. User taps **Login**
+2. Native app calls:
+   ```
+   POST https://dummyjson.com/auth/login
+   ```
+3. Receives:
+   - `accessToken` (short-lived)
+   - `refreshToken` (long-lived)
+4. Tokens stored securely using **expo-secure-store**
+5. App navigates to Secure WebView screen
+
+## WebView Auth Bootstrapping
+
+### Token Handoff Strategy
+
+**Authorization Header Injection**
+
+```ts
+headers: {
+  Authorization: `Bearer ${accessToken}`;
+}
+```
+
+**Why**
+
+- Works in Expo without native cookie APIs
+- Simple and deterministic
+- No reload required
+
+**Trade-offs**
+
+- Token visible to JS
+- Less secure than HttpOnly cookies
+- Acceptable for demo / take-home assignment
+
+## Token Refresh (Core Requirement)
+
+### Expected Behavior on TOKEN_EXPIRED
+
+1. Web app sends:
+   ```js
+   window.ReactNativeWebView.postMessage(
+     JSON.stringify({ type: "TOKEN_EXPIRED" })
+   );
+   ```
+2. Native app receives message
+3. Calls refresh API
+4. Stores new access token
+5. Injects token into WebView
+6. **User stays on the same screen**
+7. **No WebView reload**
+8. **No navigation to login**
+
+## Native ↔ Web Messaging
+
+Supported messages:
+
+| Message                | Purpose                |
+| ---------------------- | ---------------------- |
+| `TOKEN_EXPIRED`        | Triggers token refresh |
+| `TRACK_EVENT`          | Analytics / logging    |
+| `OPEN_NATIVE_SETTINGS` | Extensible example     |
+
+Messages are validated and unknown messages are ignored.
+
+## Navigation Guard
+
+Only allowlisted domains can load inside WebView.
+
+```ts
+export const ALLOWLIST = ["localhost", "web.example.local"];
+```
+
+External links open in the system browser.
+
+## Android Back Button
+
+- Hardware back button navigates WebView history first
+- Prevents accidental app exit
+- Implemented using modern BackHandler subscription API
+
+## Offline Handling
+
+- Network state monitored via `expo-network`
+- Offline state shows friendly error UI
+- WebView loads again once online
+
+## Tests
+
+Minimum required tests:
+
+1. **Token Refresh Test**
+
+   - Simulates TOKEN_EXPIRED
+   - Verifies refresh call
+   - Confirms no logout
+
+2. **WebView Render Test**
+
+   - Confirms SecureWebView renders safely
+   - Handles async effects correctly
+
+3. **Navigation Guard Test**
+   - Validates allowlist behavior
